@@ -55,6 +55,12 @@
                     }, {/*3 [7]*/
                         type : '6',
                         name : 'xcarno'
+                    }, {/*4 [8],[9]*/
+                        type : '2',
+                        name : 'xcust',
+                        dbf : 'cust',
+                        index : 'noa,nick',
+                        src : 'cust_b.aspx'
                     }]
                 });
                 $('#txtXdate1').mask('999/99/99');
