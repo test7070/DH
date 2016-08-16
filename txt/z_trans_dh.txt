@@ -145,16 +145,15 @@ z_trans_dh01:--z_trans_dh01
 	close cursor_table
 	deallocate cursor_table
 
-
 	select gno,carno
 		,trandate a01
-		,ISNULL(straddr,'') +' - ' + ISNULL(endaddr,'') a02
+		,ISNULL(straddr,'') +' -- ' + ISNULL(endaddr,'') a02
 		,dbo.getComma(mount,-1) a03
 		,dbo.getComma(price,-1) a04
 		,dbo.getComma(money1,-1) a05
 		,date2 b01
 		,item b02
-		,dbo.getComma(money2,-1) b03
+		,case when money2>0 then dbo.getComma(money2,-1) else '('+dbo.getComma(abs(money2),-1)+')' end b03
 		,dbo.getComma([money],-1) c01
 		,dbo.getComma([plusmoney],-1) c02
 		,dbo.getComma([minusmoney],-1) c03
