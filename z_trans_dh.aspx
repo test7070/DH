@@ -15,8 +15,7 @@
 		<script src="css/jquery/ui/jquery.ui.widget.js"></script>
 		<script src="css/jquery/ui/jquery.ui.datepicker_tw.js"></script>
 		<script type="text/javascript">
-            aPop = new Array(['txtXtggno', 'lblXtggno', 'tgg', 'noa,comp', 'txtXtggno', 'tgg_b.aspx']
-        	,['txtXcardealno', 'lblXcardealno', 'acomp', 'noa,acomp', 'txtXcardealno', 'acomp_b.aspx']);
+            aPop = new Array();
             
             $(document).ready(function() {
                 _q_boxClose();
@@ -47,28 +46,13 @@
 					}, {/*1  [3][4]*/
                         type : '1',
                         name : 'xdate'
-                    }, {/*2  [5][6]*/
-                        type : '1',
-                        name : 'xtrandate'
-                    }, {/*3 [7],[8]*/
-                        type : '2',
-                        name : 'xcustno',
-                        dbf : 'cust',
-                        index : 'noa,comp',
-                        src : 'cust_b.aspx'
-                    }, {/*4 [9],[10]-起迄地點*/
-                        type : '2',
-                        name : 'xaddr',
-                        dbf : 'addr',
-                        index : 'noa,addr',
-                        src : 'addr_b.aspx'
-                    }, {/*5 [11],[12]*/
+                    }, {/*2 [5],[6]*/
                         type : '2',
                         name : 'xdriver',
                         dbf : 'driver',
                         index : 'noa,namea',
                         src : 'driver_b.aspx'
-                    }, {/*3 [6]*/
+                    }, {/*3 [7]*/
                         type : '6',
                         name : 'xcarno'
                     }]
@@ -77,10 +61,6 @@
                 $('#txtXdate1').datepicker();
                 $('#txtXdate2').mask('999/99/99');
                 $('#txtXdate2').datepicker();
-                $('#txtXtrandate1').mask('999/99/99');
-                $('#txtXtrandate1').datepicker();
-                $('#txtXtrandate2').mask('999/99/99');
-                $('#txtXtrandate2').datepicker();
                 
                 q_popAssign();
                 q_langShow();
@@ -114,7 +94,7 @@
 				t_month = t_month > 9 ? t_month + '' : '0' + t_month;
 				t_day = t_date.getUTCDate();
 				t_day = t_day > 9 ? t_day + '' : '0' + t_day;
-				$('#txtDate1').val(t_year + '/' + t_month + '/' + t_day);
+				$('#txtXdate1').val(t_year + '/' + t_month + '/' + t_day);
 
 				t_date = new Date();
 				t_date.setDate(35);
@@ -125,7 +105,7 @@
 				t_month = t_month > 9 ? t_month + '' : '0' + t_month;
 				t_day = t_date.getUTCDate();
 				t_day = t_day > 9 ? t_day + '' : '0' + t_day;
-				$('#txtDate2').val(t_year + '/' + t_month + '/' + t_day );
+				$('#txtXdate2').val(t_year + '/' + t_month + '/' + t_day );
             }
 		</script>
 	</head>

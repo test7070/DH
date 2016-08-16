@@ -1,0 +1,163 @@
+z_trans_dh01:--z_trans_dh01	
+	SET QUOTED_IDENTIFIER OFF
+	declare @cmd nvarchar(max)
+	declare @t_path nvarchar(max) = '[1]'
+	declare @t_db nvarchar(max) = '[2]'
+	declare @t_bdate nvarchar(10) = case when '#non'=[3] then '' else [3] end
+	declare @t_edate nvarchar(10) = case when '#non'=[4] then CHAR(255) else [4] end
+	declare @t_bdriverno nvarchar(20) = case when '#non'=[5] then '' else [5] end
+	declare @t_edriverno nvarchar(20) = case when '#non'=[6] then CHAR(255) else [6] end
+	declare @t_carno nvarchar(max) = case when '#non'=[7] then '' else [7] end
+	--------------------------------------------------------------------------------------------------
+	declare @tmpa table(
+		sel int identity(1,1)
+		,treaccy nvarchar(10)
+		,treno nvarchar(20)
+		,carno nvarchar(20)
+		,driverno nvarchar(20)
+		,driver nvarchar(20)
+		,[money] float
+		,plusmoney float
+		,minusmoney float
+		,total float
+		,carchgno nvarchar(max)
+	)
+	declare @tmpb table(
+		sel int identity(1,1)
+		,treaccy nvarchar(10)
+		,treno nvarchar(20)
+		,trenoq nvarchar(10)
+		,trandate nvarchar(20)
+		,carno nvarchar(20)
+		,driverno nvarchar(20)
+		,driver nvarchar(20)
+		,straddrno nvarchar(20)
+		,straddr nvarchar(50)
+		,endaddrno nvarchar(20)
+		,endaddr nvarchar(50)
+		,mount float
+		,price float
+		,[money] float
+	)
+	insert into @tmpa(treaccy,treno,carno,driverno,driver,[money],plusmoney,minusmoney,total,carchgno)
+	select accy,noa,carno,driverno,driver,[money],plusmoney,minusmoney,total,carchgno
+	from view_tre a
+	where a.datea between @t_bdate and @t_edate
+	and a.driverno between @t_bdriverno and @t_edriverno
+	and (len(@t_carno)=0 or CHARINDEX(a.carno,@t_carno)>0)
+	
+	insert into @tmpb(treaccy,treno,trenoq,trandate,carno,driverno,driver,straddrno,straddr
+		,endaddrno,endaddr,mount,price,[money])
+	select a.accy,a.noa,a.noq,a.trandate,b.carno,b.driverno,b.driver,c.straddrno,c.straddr
+		,c.endaddrno,c.endaddr,a.mount,a.price,a.[money]
+	from view_tres a
+	left join @tmpa b on a.accy=b.treaccy and a.noa=b.treno
+	left join view_trans c on a.tranno=c.noa and a.trannoq=c.noq
+	where b.treno is not null
+	--------------------------------------------------------------------------------------------------
+	declare @tmpc table(
+		sel int identity(1,1)
+		,treaccy nvarchar(10)
+		,treno nvarchar(20)
+		,carno nvarchar(20)
+		,datea nvarchar(10)
+		,carchgno nvarchar(20)
+		,plusitem nvarchar(max)
+		,plusmoney float
+		,minusitem nvarchar(max)
+		,minusmoney float
+	)
+	insert into @tmpc(treaccy,treno,carno,datea,carchgno,plusitem,plusmoney,minusitem,minusmoney)
+	select b.treaccy,b.treno,b.carno,a.datea,a.noa,a.plusitem,a.plusmoney,a.minusitem,a.minusmoney
+	from carchg a
+	left join @tmpa b on CHARINDEX(a.noa,b.carchgno)>0
+	where b.treno is not null
+	--------------------------------------------------------------------------------------------------
+	declare @tmp table(
+		sel int identity(1,1)
+		,gno nvarchar(10)
+		,pno int
+		,carno nvarchar(20)
+		,driverno nvarchar(20)
+		,driver nvarchar(20)
+		
+		,trandate nvarchar(10)
+		,straddr nvarchar(20)
+		,endaddr nvarchar(20)
+		,mount float
+		,price float
+		,[money1] float
+		--加減項
+		,date2 nvarchar(10)
+		,item nvarchar(max)
+		,[money2] float
+		--車輛總計
+		,[money] float
+		,plusmoney float
+		,minusmoney float
+		,total float
+	)
+	declare @money float
+	declare @plusmoney float
+	declare @minusmoney float
+	declare @total float
+	
+	declare @carno nvarchar(20)
+	
+	
+	declare cursor_table cursor for
+	select carno from @tmpa group by carno
+	open cursor_table
+	fetch next from cursor_table
+	into @carno
+	while(@@FETCH_STATUS <> -1)
+	begin
+		
+		--出車明細
+		insert into @tmp(gno,pno,carno,driverno,driver,trandate,straddr,endaddr,mount,price,money1)
+		select '1',1,carno,driverno,driver,trandate,straddr,endaddr,mount,price,[money]
+		from @tmpb 
+		where carno=@carno
+		order by trandate,treaccy,treno,trenoq
+		--加減項
+		insert into @tmp(gno,pno,carno,date2,item,money2)
+		select '2',2,carno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,''),ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
+		from @tmpc 
+		where carno=@carno
+		--合計
+		select @money=0,@plusmoney=0,@minusmoney=0
+		select @money=SUM(isnull([money],0)) from @tmpb where carno=@carno
+		select @plusmoney=SUM(ISNULL(plusmoney,0)),@minusmoney=SUM(ISNULL(minusmoney,0)) 
+			from @tmpc where carno=@carno
+		set @total = ISNULL(@money,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)
+		insert into @tmp(gno,pno,carno,[money])
+		select '3',3,@carno,@money
+		insert into @tmp(gno,pno,carno,plusmoney)
+		select '4',4,@carno,@plusmoney
+		insert into @tmp(gno,pno,carno,minusmoney)
+		select '5',5,@carno,@minusmoney
+		insert into @tmp(gno,pno,carno,total)
+		select '6',6,@carno,@total
+		
+		fetch next from cursor_table
+		into @carno
+	end
+	close cursor_table
+	deallocate cursor_table
+
+
+	select gno,carno
+		,trandate a01
+		,ISNULL(straddr,'') +' - ' + ISNULL(endaddr,'') a02
+		,dbo.getComma(mount,-1) a03
+		,dbo.getComma(price,-1) a04
+		,dbo.getComma(money1,-1) a05
+		,date2 b01
+		,item b02
+		,dbo.getComma(money2,-1) b03
+		,dbo.getComma([money],-1) c01
+		,dbo.getComma([plusmoney],-1) c02
+		,dbo.getComma([minusmoney],-1) c03
+		,dbo.getComma([total],-1) c04
+	from @tmp 
+	order by carno,sel;
