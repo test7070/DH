@@ -20,6 +20,7 @@ z_trans_dh02:--z_trans_dh02
 		,minusmoney float
 		,total float
 		,custchgno nvarchar(max)
+		,vccano nvarchar(max)
 	)
 	declare @tmpb table(
 		sel int identity(1,1)
@@ -41,8 +42,8 @@ z_trans_dh02:--z_trans_dh02
 		,price float
 		,[money] float
 	)
-	insert into @tmpa(custno,trdaccy,trdno,[money],plusmoney,minusmoney,total,custchgno)
-	select custno,a.accy,a.noa,[money],plusmoney,minusmoney,total,custchgno
+	insert into @tmpa(custno,trdaccy,trdno,[money],plusmoney,minusmoney,total,custchgno,vccano)
+	select custno,a.accy,a.noa,[money],plusmoney,minusmoney,total,custchgno,vccano
 	from view_trd a
 	where a.datea between @t_bdate and @t_edate
 	and a.custno between @t_bcustno and @t_ecustno
@@ -72,6 +73,21 @@ z_trans_dh02:--z_trans_dh02
 	select b.custno,b.trdaccy,b.trdno,a.datea,a.noa,a.plusitem,a.plusmoney,a.minusitem,a.minusmoney
 	from custchg a
 	left join @tmpa b on CHARINDEX(a.noa,b.custchgno)>0
+	where b.trdno is not null
+	--------------------------------------------------------------------------------------------------
+	declare @tmpd table(
+		sel int identity(1,1)
+		,custno nvarchar(20)
+		,treaccy nvarchar(10)
+		,treno nvarchar(20)
+		,datea nvarchar(10)
+		,vccano nvarchar(20)
+		,tax float
+	)
+	insert into @tmpd(custno,treaccy,treno,datea,vccano,tax)
+	select b.custno,b.trdaccy,b.trdno,a.datea,a.noa,a.tax
+	from vcca a
+	left join @tmpa b on CHARINDEX(a.noa,b.vccano)>0
 	where b.trdno is not null
 	--------------------------------------------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#z_trans_db02')is not null 
@@ -106,12 +122,14 @@ z_trans_dh02:--z_trans_dh02
 		,[money] float
 		,plusmoney float
 		,minusmoney float
+		,tax float
 		,total float
 	)
 	declare @custno nvarchar(20)
 	declare @money float
 	declare @plusmoney float
 	declare @minusmoney float
+	declare @tax float
 	declare @total float
 	
 	declare @pageCount int = 30 --一頁幾筆資料
@@ -135,26 +153,35 @@ z_trans_dh02:--z_trans_dh02
 		select '2',2,custno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,''),ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
 		from @tmpc 
 		where custno=@custno
+		--發票
+		insert into #z_trans_db02(gno,pno,custno,date2,item,money2)
+		select '3',2,custno,datea,vccano,tax 
+		from @tmpd 
+		where custno=@custno
+		
 		--合計
 		select @money=0,@plusmoney=0,@minusmoney=0
 		select @money=SUM(isnull([money],0)) from @tmpb where custno=@custno
 		select @plusmoney=SUM(ISNULL(plusmoney,0)),@minusmoney=SUM(ISNULL(minusmoney,0)) 
 			from @tmpc where custno=@custno
-		set @total = ISNULL(@money,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)
+		select @tax=SUM(isnull([tax],0)) from @tmpd where custno=@custno	
+		set @total = ISNULL(@money,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)+ISNULL(@tax,0)
 		insert into #z_trans_db02(gno,pno,custno,[money])
-		select '3',3,@custno,@money
+		select '4',3,@custno,@money
 		insert into #z_trans_db02(gno,pno,custno,plusmoney)
-		select '4',4,@custno,@plusmoney
+		select '5',4,@custno,@plusmoney
 		insert into #z_trans_db02(gno,pno,custno,minusmoney)
-		select '5',5,@custno,@minusmoney
+		select '6',5,@custno,@minusmoney
+		insert into #z_trans_db02(gno,pno,custno,tax)
+		select '7',6,@custno,@tax
 		insert into #z_trans_db02(gno,pno,custno,total)
-		select '6',6,@custno,@total
+		select '8',7,@custno,@total
 		
 		select @n=0
 		select @n=COUNT(1) from #z_trans_db02 where custno=@custno
 		while @n%@pageCount!=0
 		begin
-			insert into #z_trans_db02(gno,pno,custno)values('7',7,@custno)
+			insert into #z_trans_db02(gno,pno,custno)values('9',9,@custno)
 			set @n=@n+1
 		end
 
@@ -191,10 +218,10 @@ z_trans_dh02:--z_trans_dh02
 		,dbo.getComma([money],-1) c01
 		,dbo.getComma([plusmoney],-1) c02
 		,dbo.getComma([minusmoney],-1) c03
-		,dbo.getComma([total],-1) c04
+		,dbo.getComma([tax],-1) c04
+		,dbo.getComma([total],-1) c05
 	from #z_trans_db02
 	order by custno,sel;
-	
 	
 
 z_trans_dh01:--z_trans_dh01	
