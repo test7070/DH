@@ -41,6 +41,7 @@ z_trans_dh02:--z_trans_dh02
 		,mount float
 		,price float
 		,[money] float
+		,memo nvarchar(max)
 	)
 	insert into @tmpa(custno,trdaccy,trdno,[money],plusmoney,minusmoney,total,custchgno,vccano)
 	select custno,a.accy,a.noa,[money],plusmoney,minusmoney,total,custchgno,vccano
@@ -49,9 +50,9 @@ z_trans_dh02:--z_trans_dh02
 	and a.custno between @t_bcustno and @t_ecustno
 	
 	insert into @tmpb(custno,trdaccy,trdno,trdnoq,trandate,carno,driverno,driver,straddrno,straddr
-		,endaddrno,endaddr,mount,price,[money])
+		,endaddrno,endaddr,mount,price,[money],memo)
 	select b.custno,a.accy,a.noa,a.noq,a.trandate,c.carno,c.driverno,c.driver,c.straddrno,c.straddr
-		,c.endaddrno,c.endaddr,a.mount,a.price,a.total
+		,c.endaddrno,c.endaddr,a.mount,a.price,a.total,c.memo
 	from view_trds a
 	left join @tmpa b on a.accy=b.trdaccy and a.noa=b.trdno
 	left join view_trans c on a.tranno=c.noa and a.trannoq=c.noq
@@ -114,6 +115,7 @@ z_trans_dh02:--z_trans_dh02
 		,mount float
 		,price float
 		,[money1] float
+		,memo nvarchar(max)
 		--加減項
 		,date2 nvarchar(10)
 		,item nvarchar(max)
@@ -132,7 +134,7 @@ z_trans_dh02:--z_trans_dh02
 	declare @tax float
 	declare @total float
 	
-	declare @pageCount int = 30 --一頁幾筆資料
+	declare @pageCount int = 15 --一頁幾筆資料
 	declare @n int
 	
 	declare cursor_table cursor for
@@ -143,8 +145,8 @@ z_trans_dh02:--z_trans_dh02
 	while(@@FETCH_STATUS <> -1)
 	begin
 		--出車明細
-		insert into #z_trans_db02(gno,pno,custno,carno,driverno,driver,trandate,straddr,endaddr,mount,price,money1)
-		select '1',1,custno,carno,driverno,driver,trandate,straddr,endaddr,mount,price,[money]
+		insert into #z_trans_db02(gno,pno,custno,carno,driverno,driver,trandate,straddr,endaddr,mount,price,money1,memo)
+		select '1',1,custno,carno,driverno,driver,trandate,straddr,endaddr,mount,price,[money],memo
 		from @tmpb 
 		where custno=@custno
 		order by trandate,trdaccy,trdno,trdnoq
@@ -168,20 +170,28 @@ z_trans_dh02:--z_trans_dh02
 		set @total = ISNULL(@money,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)+ISNULL(@tax,0)
 		insert into #z_trans_db02(gno,pno,custno,[money])
 		select '4',3,@custno,@money
-		insert into #z_trans_db02(gno,pno,custno,plusmoney)
-		select '5',4,@custno,@plusmoney
-		insert into #z_trans_db02(gno,pno,custno,minusmoney)
-		select '6',5,@custno,@minusmoney
-		insert into #z_trans_db02(gno,pno,custno,tax)
-		select '7',6,@custno,@tax
+		if isnull(@plusmoney,0)!=0
+			insert into #z_trans_db02(gno,pno,custno,plusmoney) select '5',4,@custno,@plusmoney
+		if isnull(@minusmoney,0)!=0
+			insert into #z_trans_db02(gno,pno,custno,minusmoney) select '6',5,@custno,@minusmoney
+		if isnull(@tax,0) !=0
+			insert into #z_trans_db02(gno,pno,custno,tax) select '7',6,@custno,@tax
 		insert into #z_trans_db02(gno,pno,custno,total)
 		select '8',7,@custno,@total
+		
+		insert into #z_trans_db02(gno,pno,custno)select '9',9,@custno
+		insert into #z_trans_db02(gno,pno,custno)select '10',10,@custno
+		insert into #z_trans_db02(gno,pno,custno)select '11',11,@custno
+		insert into #z_trans_db02(gno,pno,custno)select '12',12,@custno
+		insert into #z_trans_db02(gno,pno,custno)select '13',13,@custno
+		insert into #z_trans_db02(gno,pno,custno)select '14',14,@custno
+		insert into #z_trans_db02(gno,pno,custno)select '15',15,@custno
 		
 		select @n=0
 		select @n=COUNT(1) from #z_trans_db02 where custno=@custno
 		while @n%@pageCount!=0
 		begin
-			insert into #z_trans_db02(gno,pno,custno)values('9',9,@custno)
+			insert into #z_trans_db02(gno,pno,custno)values('16',16,@custno)
 			set @n=@n+1
 		end
 
@@ -204,25 +214,29 @@ z_trans_dh02:--z_trans_dh02
 	from #z_trans_db02 a
 	left join (select custno,MAX(pp) pp from #z_trans_db02 group by custno) b on a.custno=b.custno
 	
-	select gno,custno d01,cust d02
-		,recno rr,pp,qq
-		,trandate a01
-		,carno a02
-		,ISNULL(straddr,'') +' -- ' + ISNULL(endaddr,'') a03
-		,dbo.getComma(mount,-1) a04
-		,dbo.getComma(price,-1) a05
-		,dbo.getComma(money1,-1) a06
-		,date2 b01
-		,item b02
-		,dbo.getComma([money2],-1) b03
-		,dbo.getComma([money],-1) c01
-		,dbo.getComma([plusmoney],-1) c02
-		,dbo.getComma([minusmoney],-1) c03
-		,dbo.getComma([tax],-1) c04
-		,dbo.getComma([total],-1) c05
-	from #z_trans_db02
-	order by custno,sel;
-	
+	select a.gno
+		,b.comp d01
+		,b.tel d02
+		,b.addr_comp d03
+		,a.recno rr,pp,qq
+		,a.trandate a01
+		,ISNULL(a.straddr,'') +' -- ' + ISNULL(a.endaddr,'') a02
+		,a.carno a03
+		
+		,dbo.getComma(a.mount,-1) a04
+		,dbo.getComma(a.money1,-1) a05
+		,a.memo a06
+		,a.date2 b01
+		,a.item b02
+		,dbo.getComma(a.[money2],-1) b03
+		,dbo.getComma(a.[money],-1) c01
+		,dbo.getComma(a.[plusmoney],-1) c02
+		,dbo.getComma(a.[minusmoney],-1) c03
+		,dbo.getComma(a.[tax],-1) c04
+		,dbo.getComma(a.[total],-1) c05
+	from #z_trans_db02 a
+	left join cust b on a.custno=b.noa
+	order by a.custno,a.sel;
 
 z_trans_dh01:--z_trans_dh01	
 	SET QUOTED_IDENTIFIER OFF
