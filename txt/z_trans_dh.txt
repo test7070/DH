@@ -299,7 +299,7 @@ z_trans_dh01:--z_trans_dh01
 		sel int identity(1,1)
 		,treaccy nvarchar(10)
 		,treno nvarchar(20)
-		,carno nvarchar(20)
+		,driverno nvarchar(20)
 		,datea nvarchar(10)
 		,carchgno nvarchar(20)
 		,plusitem nvarchar(max)
@@ -307,8 +307,8 @@ z_trans_dh01:--z_trans_dh01
 		,minusitem nvarchar(max)
 		,minusmoney float
 	)
-	insert into @tmpc(treaccy,treno,carno,datea,carchgno,plusitem,plusmoney,minusitem,minusmoney)
-	select b.treaccy,b.treno,b.carno,a.datea,a.noa,a.plusitem,a.plusmoney,a.minusitem,a.minusmoney
+	insert into @tmpc(treaccy,treno,driverno,datea,carchgno,plusitem,plusmoney,minusitem,minusmoney)
+	select b.treaccy,b.treno,b.driverno,a.datea,a.noa,a.plusitem,a.plusmoney,a.minusitem,a.minusmoney
 	from carchg a
 	left join @tmpa b on CHARINDEX(a.noa,b.carchgno)>0
 	where b.treno is not null
@@ -350,16 +350,16 @@ z_trans_dh01:--z_trans_dh01
 	declare @minusmoney float
 	declare @total float
 	
-	declare @carno nvarchar(20)
+	declare @driverno nvarchar(20)
 	
 	declare @pageCount int = 30 --一頁幾筆資料
 	declare @n int
 	
 	declare cursor_table cursor for
-	select carno from @tmpa group by carno
+	select driverno from @tmpa group by driverno
 	open cursor_table
 	fetch next from cursor_table
-	into @carno
+	into @driverno
 	while(@@FETCH_STATUS <> -1)
 	begin
 		
@@ -367,52 +367,54 @@ z_trans_dh01:--z_trans_dh01
 		insert into #z_trans_db01(gno,pno,carno,driverno,driver,trandate,straddr,endaddr,mount,price,money1)
 		select '1',1,carno,driverno,driver,trandate,straddr,endaddr,mount,price,[money]
 		from @tmpb 
-		where carno=@carno
+		where driverno=@driverno
 		order by trandate,treaccy,treno,trenoq
 		--加減項
-		insert into #z_trans_db01(gno,pno,carno,date2,item,money2)
-		select '2',2,carno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,''),ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
+		insert into #z_trans_db01(gno,pno,driverno,date2,item,money2)
+		select '2',2,driverno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,''),ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
 		from @tmpc 
-		where carno=@carno
+		where driverno=@driverno
 		--合計
 		select @money=0,@plusmoney=0,@minusmoney=0
-		select @money=SUM(isnull([money],0)) from @tmpb where carno=@carno
+		select @money=SUM(isnull([money],0)) from @tmpb where driverno=@driverno
 		select @plusmoney=SUM(ISNULL(plusmoney,0)),@minusmoney=SUM(ISNULL(minusmoney,0)) 
-			from @tmpc where carno=@carno
+			from @tmpc where driverno=@driverno
 		set @total = ISNULL(@money,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)
-		insert into #z_trans_db01(gno,pno,carno,[money])
-		select '3',3,@carno,@money
-		insert into #z_trans_db01(gno,pno,carno,plusmoney)
-		select '4',4,@carno,@plusmoney
-		insert into #z_trans_db01(gno,pno,carno,minusmoney)
-		select '5',5,@carno,@minusmoney
-		insert into #z_trans_db01(gno,pno,carno,total)
-		select '6',6,@carno,@total
+		insert into #z_trans_db01(gno,pno,driverno,[money])
+		select '3',3,@driverno,@money
+		insert into #z_trans_db01(gno,pno,driverno,plusmoney)
+		select '4',4,@driverno,@plusmoney
+		insert into #z_trans_db01(gno,pno,driverno,minusmoney)
+		select '5',5,@driverno,@minusmoney
+		insert into #z_trans_db01(gno,pno,driverno,total)
+		select '6',6,@driverno,@total
 		
 		select @n=0
-		select @n=COUNT(1) from #z_trans_db01 where carno=@carno
+		select @n=COUNT(1) from #z_trans_db01 where driverno=@driverno
 		while @n%@pageCount!=0
 		begin
-			insert into #z_trans_db01(gno,pno,carno)values('7',7,@carno)
+			insert into #z_trans_db01(gno,pno,driverno)values('7',7,@driverno)
 			set @n=@n+1
 		end
 		
 		fetch next from cursor_table
-		into @carno
+		into @driverno
 	end
 	close cursor_table
 	deallocate cursor_table
 	
 	update #z_trans_db01 set recno=b.recno
 	from #z_trans_db01 a
-	left join (select sel,ROW_NUMBER()over(partition by carno order by sel)recno from #z_trans_db01) b on a.sel=b.sel
+	left join (select sel,ROW_NUMBER()over(partition by driverno order by sel)recno from #z_trans_db01) b on a.sel=b.sel
 	
 	update #z_trans_db01 set pp = floor((recno-1)/@pageCount)+1
 	update #z_trans_db01 set qq = b.pp
 	from #z_trans_db01 a
-	left join (select carno,MAX(pp) pp from #z_trans_db01 group by carno) b on a.carno=b.carno
+	left join (select driverno,MAX(pp) pp from #z_trans_db01 group by driverno) b on a.driverno=b.driverno
 	
-	select gno,carno,recno rr,pp,qq
+	select gno,recno rr,pp,qq
+		,driverno d01
+		,driver d02
 		,trandate a01
 		,ISNULL(straddr,'') +' -- ' + ISNULL(endaddr,'') a02
 		,dbo.getComma(mount,-1) a03
@@ -426,5 +428,5 @@ z_trans_dh01:--z_trans_dh01
 		,dbo.getComma([minusmoney],-1) c03
 		,dbo.getComma([total],-1) c04
 	from #z_trans_db01 
-	order by carno,sel
+	order by driverno,sel
 	drop table #z_trans_db01;
