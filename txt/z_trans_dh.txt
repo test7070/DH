@@ -134,7 +134,7 @@ z_trans_dh02:--z_trans_dh02
 	declare @tax float
 	declare @total float
 	
-	declare @pageCount int = 15 --一頁幾筆資料
+	declare @pageCount int = 30 --一頁幾筆資料
 	declare @n int
 	
 	declare cursor_table cursor for
