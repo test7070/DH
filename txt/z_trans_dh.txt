@@ -277,7 +277,10 @@ z_trans_dh01:--z_trans_dh01
 		,endaddr nvarchar(50)
 		,mount float
 		,price float
+		,tranmoney float
+		,discount float
 		,[money] float
+		,memo nvarchar(max)
 	)
 	insert into @tmpa(treaccy,treno,carno,driverno,driver,[money],plusmoney,minusmoney,total,carchgno)
 	select accy,noa,carno,driverno,driver,[money],plusmoney,minusmoney,total,carchgno
@@ -287,9 +290,9 @@ z_trans_dh01:--z_trans_dh01
 	and (len(@t_carno)=0 or CHARINDEX(a.carno,@t_carno)>0)
 	
 	insert into @tmpb(treaccy,treno,trenoq,trandate,carno,driverno,driver,straddrno,straddr
-		,endaddrno,endaddr,mount,price,[money])
+		,endaddrno,endaddr,mount,price,discount,[money],tranmoney,memo)
 	select a.accy,a.noa,a.noq,a.trandate,b.carno,b.driverno,b.driver,c.straddrno,c.straddr
-		,c.endaddrno,c.endaddr,a.mount,a.price,a.[money]
+		,c.endaddrno,c.endaddr,a.mount,a.price,c.discount,a.[money],ROUND(a.mount*a.price,0),c.memo
 	from view_tres a
 	left join @tmpa b on a.accy=b.treaccy and a.noa=b.treno
 	left join view_trans c on a.tranno=c.noa and a.trannoq=c.noq
@@ -334,21 +337,27 @@ z_trans_dh01:--z_trans_dh01
 		,endaddr nvarchar(20)
 		,mount float
 		,price float
+		,discount float
 		,[money1] float
+		,memo nvarchar(max)
 		--加減項
 		,date2 nvarchar(10)
 		,item nvarchar(max)
 		,[money2] float
 		--車輛總計
-		,[money] float
+		,tranmoney float
+		,discountM float
 		,plusmoney float
 		,minusmoney float
 		,total float
 	)
+	declare @tranmoney float
+	declare @discountM float
 	declare @money float
 	declare @plusmoney float
 	declare @minusmoney float
 	declare @total float
+	declare @discount float
 	
 	declare @driverno nvarchar(20)
 	
@@ -364,36 +373,53 @@ z_trans_dh01:--z_trans_dh01
 	begin
 		
 		--出車明細
-		insert into #z_trans_db01(gno,pno,carno,driverno,driver,trandate,straddr,endaddr,mount,price,money1)
-		select '1',1,carno,driverno,driver,trandate,straddr,endaddr,mount,price,[money]
+		insert into #z_trans_db01(gno,pno,carno,driverno,driver,trandate,straddr,endaddr,mount,price,discount,tranmoney,money1,memo)
+		select '1',1,carno,driverno,driver,trandate,straddr,endaddr,mount,price,discount,tranmoney,[money],memo
 		from @tmpb 
 		where driverno=@driverno
 		order by trandate,treaccy,treno,trenoq
-		--加減項
+		--加減項明細
 		insert into #z_trans_db01(gno,pno,driverno,date2,item,money2)
 		select '2',2,driverno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,''),ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
 		from @tmpc 
 		where driverno=@driverno
-		--合計
-		select @money=0,@plusmoney=0,@minusmoney=0
-		select @money=SUM(isnull([money],0)) from @tmpb where driverno=@driverno
+		--運費小計  
+		select @tranmoney=0,@money=0,@plusmoney=0,@minusmoney=0
+		select @tranmoney=SUM(tranmoney),@money=SUM(isnull([money],0)) from @tmpb where driverno=@driverno
+		insert into #z_trans_db01(gno,pno,driverno,tranmoney)select '3',3,@driverno,@tranmoney
+		--扣%
+			declare cursor_table2 cursor for
+			select discount,sum(tranmoney-[money]) from @tmpb 
+			where driverno=@driverno group by discount having sum(tranmoney-[money])!=0
+			open cursor_table2
+			fetch next from cursor_table2
+			into @discount,@discountM
+			while(@@FETCH_STATUS <> -1)
+			begin
+				insert into #z_trans_db01(gno,pno,driverno,discountM,discount)select '4',4,@driverno,@discountM,@discount
+			
+				fetch next from cursor_table2
+				into @discount,@discountM
+			end
+			close cursor_table2
+			deallocate cursor_table2
+		
 		select @plusmoney=SUM(ISNULL(plusmoney,0)),@minusmoney=SUM(ISNULL(minusmoney,0)) 
-			from @tmpc where driverno=@driverno
+			from @tmpc where driverno=@driverno			
 		set @total = ISNULL(@money,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)
-		insert into #z_trans_db01(gno,pno,driverno,[money])
-		select '3',3,@driverno,@money
+		
 		insert into #z_trans_db01(gno,pno,driverno,plusmoney)
-		select '4',4,@driverno,@plusmoney
+		select '5',5,@driverno,@plusmoney
 		insert into #z_trans_db01(gno,pno,driverno,minusmoney)
-		select '5',5,@driverno,@minusmoney
+		select '6',6,@driverno,@minusmoney
 		insert into #z_trans_db01(gno,pno,driverno,total)
-		select '6',6,@driverno,@total
+		select '7',7,@driverno,@total
 		
 		select @n=0
 		select @n=COUNT(1) from #z_trans_db01 where driverno=@driverno
 		while @n%@pageCount!=0
 		begin
-			insert into #z_trans_db01(gno,pno,driverno)values('7',7,@driverno)
+			insert into #z_trans_db01(gno,pno,driverno)values('8',8,@driverno)
 			set @n=@n+1
 		end
 		
@@ -412,21 +438,24 @@ z_trans_dh01:--z_trans_dh01
 	from #z_trans_db01 a
 	left join (select driverno,MAX(pp) pp from #z_trans_db01 group by driverno) b on a.driverno=b.driverno
 	
+
 	select gno,recno rr,pp,qq
 		,driverno d01
 		,driver d02
 		,trandate a01
-		,ISNULL(straddr,'') +' -- ' + ISNULL(endaddr,'') a02
+		,ISNULL(straddr,'') +' -- ' + ISNULL(endaddr,'') + '　　'+ISNULL(memo,'') a02
 		,dbo.getComma(mount,-1) a03
-		,dbo.getComma(price,-1) a04
-		,dbo.getComma(money1,-1) a05
+		,dbo.getComma(tranmoney,-1) a04
+
 		,date2 b01
 		,item b02
 		,dbo.getComma([money2],-1) b03
-		,dbo.getComma([money],-1) c01
-		,dbo.getComma([plusmoney],-1) c02
-		,dbo.getComma([minusmoney],-1) c03
-		,dbo.getComma([total],-1) c04
+		,dbo.getComma([tranmoney],-1) c01
+		,dbo.getComma([discountM],-1) c02
+		,dbo.getComma([plusmoney],-1) c03
+		,dbo.getComma([minusmoney],-1) c04
+		,dbo.getComma([total],-1) c05
+		,CAST((1-discount)*100 as nvarchar)+'%：' e01 		
 	from #z_trans_db01 
 	order by driverno,sel
 	drop table #z_trans_db01;
