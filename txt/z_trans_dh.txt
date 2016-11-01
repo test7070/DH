@@ -249,6 +249,9 @@ z_trans_dh01:--z_trans_dh01
 	declare @t_edriverno nvarchar(20) = case when '#non'=[6] then CHAR(255) else [6] end
 	declare @t_carno nvarchar(max) = case when '#non'=[7] then '' else [7] end
 	--------------------------------------------------------------------------------------------------
+	--  旺梨司機應付以報表為準,立帳單不一定對
+	--  外車假如當場直接收現,出車單會輸入一筆扣款,但不跟司機收5%,因此運費須注意
+	--  實際付的錢不等於出車單上的應付
 	declare @tmpa table(
 		sel int identity(1,1)
 		,treaccy nvarchar(10)
@@ -292,11 +295,12 @@ z_trans_dh01:--z_trans_dh01
 	insert into @tmpb(treaccy,treno,trenoq,trandate,carno,driverno,driver,straddrno,straddr
 		,endaddrno,endaddr,mount,price,discount,[money],tranmoney,memo)
 	select a.accy,a.noa,a.noq,a.trandate,b.carno,b.driverno,b.driver,c.straddrno,c.straddr
-		,c.endaddrno,c.endaddr,a.mount,a.price,c.discount,a.[money],ROUND(a.mount*a.price,0),c.sender
+		,c.endaddrno,c.endaddr,a.mount,a.price,case when c.discount=0 then 1 else c.discount end,a.[money],ROUND(a.mount*a.price,0),c.sender
 	from view_tres a
 	left join @tmpa b on a.accy=b.treaccy and a.noa=b.treno
 	left join view_trans c on a.tranno=c.noa and a.trannoq=c.noq
 	where b.treno is not null
+	
 	--------------------------------------------------------------------------------------------------
 	declare @tmpc table(
 		sel int identity(1,1)
@@ -350,6 +354,7 @@ z_trans_dh01:--z_trans_dh01
 		,plusmoney float
 		,minusmoney float
 		,total float
+		,xmemo nvarchar(max)
 	)
 	declare @tranmoney float
 	declare @discountM float
@@ -384,19 +389,33 @@ z_trans_dh01:--z_trans_dh01
 		from @tmpc 
 		where driverno=@driverno
 		--運費小計  
-		select @tranmoney=0,@money=0,@plusmoney=0,@minusmoney=0
-		select @tranmoney=SUM(tranmoney),@money=SUM(isnull([money],0)) from @tmpb where driverno=@driverno
+		select @tranmoney=0
+		select @tranmoney=SUM(tranmoney)
+		from @tmpb where driverno=@driverno and tranmoney>0
 		insert into #z_trans_db01(gno,pno,driverno,tranmoney)select '3',3,@driverno,@tranmoney
+		--當場收小計  
+		select @tranmoney=0
+		select @tranmoney=SUM(tranmoney) from @tmpb 
+		where driverno=@driverno and tranmoney<0
+		if isnull(@tranmoney,0)!=0
+		begin
+			insert into #z_trans_db01(gno,pno,driverno,discountM,xmemo)select '4',4,@driverno,abs(@tranmoney),'已收現：'
+		end
 		--扣%
 			declare cursor_table2 cursor for
-			select discount,sum(tranmoney-[money]) from @tmpb 
-			where driverno=@driverno group by discount having sum(tranmoney-[money])!=0
+			select discount,sum(tranmoney) from @tmpb 
+			where driverno=@driverno and discount!=1 group by discount 
 			open cursor_table2
 			fetch next from cursor_table2
 			into @discount,@discountM
 			while(@@FETCH_STATUS <> -1)
-			begin
-				insert into #z_trans_db01(gno,pno,driverno,discountM,discount)select '4',4,@driverno,@discountM,@discount
+			begin	
+				select @money=0
+				select @money=SUM(discountM) from #z_trans_db01 where driverno=@driverno and gno='4' 
+				select @money = @discountM-ISNULL(@money,0)
+			
+				insert into #z_trans_db01(gno,pno,driverno,discountM,discount,xmemo)
+				select '5',5,@driverno,round(@money*(1-@discount),0),@discount,CAST((1-@discount)*100 as nvarchar)+'%：'
 			
 				fetch next from cursor_table2
 				into @discount,@discountM
@@ -404,22 +423,26 @@ z_trans_dh01:--z_trans_dh01
 			close cursor_table2
 			deallocate cursor_table2
 		
+		select @tranmoney=0,@discountM=0
+		select @tranmoney=sum(tranmoney) from @tmpb where driverno=@driverno
+		select @discountM=discountM from #z_trans_db01 where driverno=@driverno and gno='5'
+		
 		select @plusmoney=SUM(ISNULL(plusmoney,0)),@minusmoney=SUM(ISNULL(minusmoney,0)) 
 			from @tmpc where driverno=@driverno			
-		set @total = ISNULL(@money,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)
+		set @total = ISNULL(@tranmoney,0)-ISNULL(@discountM,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)
 		
 		insert into #z_trans_db01(gno,pno,driverno,plusmoney)
-		select '5',5,@driverno,@plusmoney
+		select '6',6,@driverno,@plusmoney
 		insert into #z_trans_db01(gno,pno,driverno,minusmoney)
-		select '6',6,@driverno,@minusmoney
+		select '7',7,@driverno,@minusmoney
 		insert into #z_trans_db01(gno,pno,driverno,total)
-		select '7',7,@driverno,@total
+		select '8',8,@driverno,@total
 		
 		select @n=0
 		select @n=COUNT(1) from #z_trans_db01 where driverno=@driverno
 		while @n%@pageCount!=0
 		begin
-			insert into #z_trans_db01(gno,pno,driverno)values('8',8,@driverno)
+			insert into #z_trans_db01(gno,pno,driverno)values('9',9,@driverno)
 			set @n=@n+1
 		end
 		
@@ -428,6 +451,10 @@ z_trans_dh01:--z_trans_dh01
 	end
 	close cursor_table
 	deallocate cursor_table
+	
+	update #z_trans_db01 set driver=isnull(b.namea,'')
+	from #z_trans_db01 a
+	left join driver b on a.driverno=b.noa
 	
 	update #z_trans_db01 set recno=b.recno
 	from #z_trans_db01 a
@@ -455,7 +482,7 @@ z_trans_dh01:--z_trans_dh01
 		,dbo.getComma([plusmoney],-1) c03
 		,dbo.getComma([minusmoney],-1) c04
 		,dbo.getComma([total],-1) c05
-		,CAST((1-discount)*100 as nvarchar)+'%：' e01 		
+		,xmemo e01 		
 	from #z_trans_db01 
 	order by driverno,sel
 	drop table #z_trans_db01;
