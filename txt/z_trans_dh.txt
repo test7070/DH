@@ -356,7 +356,8 @@ z_trans_dh01:--z_trans_dh01
 		,total float
 		,xmemo nvarchar(max)
 	)
-	declare @tranmoney float
+	declare @tranmoney1 float
+	declare @tranmoney2 float
 	declare @discountM float
 	declare @money float
 	declare @plusmoney float
@@ -389,18 +390,20 @@ z_trans_dh01:--z_trans_dh01
 		from @tmpc 
 		where driverno=@driverno
 		--運費小計  
-		select @tranmoney=0
-		select @tranmoney=SUM(tranmoney)
+		select @tranmoney1=0
+		select @tranmoney1=SUM(tranmoney)
 		from @tmpb where driverno=@driverno and tranmoney>0
-		insert into #z_trans_db01(gno,pno,driverno,tranmoney)select '3',3,@driverno,@tranmoney
+		--insert into #z_trans_db01(gno,pno,driverno,tranmoney)select '3',3,@driverno,@tranmoney
 		--當場收小計  
-		select @tranmoney=0
-		select @tranmoney=SUM(tranmoney) from @tmpb 
+		select @tranmoney2=0
+		select @tranmoney2=SUM(tranmoney) from @tmpb 
 		where driverno=@driverno and tranmoney<0
-		if isnull(@tranmoney,0)!=0
-		begin
-			insert into #z_trans_db01(gno,pno,driverno,discountM,xmemo)select '4',4,@driverno,abs(@tranmoney),'已收現：'
-		end
+		--if isnull(@tranmoney,0)!=0
+		--begin
+			--insert into #z_trans_db01(gno,pno,driverno,discountM,xmemo)select '4',4,@driverno,abs(@tranmoney),'已收現：'
+		--end
+		
+		insert into #z_trans_db01(gno,pno,driverno,tranmoney)select '3',3,@driverno,isnull(@tranmoney1,0)+isnull(@tranmoney2,0)
 		--扣%
 			declare cursor_table2 cursor for
 			select discount,sum(tranmoney) from @tmpb 
@@ -410,9 +413,7 @@ z_trans_dh01:--z_trans_dh01
 			into @discount,@discountM
 			while(@@FETCH_STATUS <> -1)
 			begin	
-				select @money=0
-				select @money=SUM(discountM) from #z_trans_db01 where driverno=@driverno and gno='4' 
-				select @money = @discountM-ISNULL(@money,0)
+				select @money = @discountM+ISNULL(@tranmoney2,0)
 			
 				insert into #z_trans_db01(gno,pno,driverno,discountM,discount,xmemo)
 				select '5',5,@driverno,round(@money*(1-@discount),0),@discount,CAST((1-@discount)*100 as nvarchar)+'%：'
@@ -423,13 +424,9 @@ z_trans_dh01:--z_trans_dh01
 			close cursor_table2
 			deallocate cursor_table2
 		
-		select @tranmoney=0,@discountM=0
-		select @tranmoney=sum(tranmoney) from @tmpb where driverno=@driverno
-		select @discountM=discountM from #z_trans_db01 where driverno=@driverno and gno='5'
-		
 		select @plusmoney=SUM(ISNULL(plusmoney,0)),@minusmoney=SUM(ISNULL(minusmoney,0)) 
 			from @tmpc where driverno=@driverno			
-		set @total = ISNULL(@tranmoney,0)-ISNULL(@discountM,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)
+		set @total = ISNULL(@tranmoney1,0)+ISNULL(@tranmoney2,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)
 		
 		insert into #z_trans_db01(gno,pno,driverno,plusmoney)
 		select '6',6,@driverno,@plusmoney
