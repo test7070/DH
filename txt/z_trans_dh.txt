@@ -292,7 +292,7 @@ z_trans_dh01:--z_trans_dh01
 	insert into @tmpb(treaccy,treno,trenoq,trandate,carno,driverno,driver,straddrno,straddr
 		,endaddrno,endaddr,mount,price,discount,[money],tranmoney,memo)
 	select a.accy,a.noa,a.noq,a.trandate,b.carno,b.driverno,b.driver,c.straddrno,c.straddr
-		,c.endaddrno,c.endaddr,a.mount,a.price,c.discount,a.[money],ROUND(a.mount*a.price,0),c.memo
+		,c.endaddrno,c.endaddr,a.mount,a.price,c.discount,a.[money],ROUND(a.mount*a.price,0),c.sender
 	from view_tres a
 	left join @tmpa b on a.accy=b.treaccy and a.noa=b.treno
 	left join view_trans c on a.tranno=c.noa and a.trannoq=c.noq
