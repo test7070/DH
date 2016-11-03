@@ -356,7 +356,11 @@ z_trans_dh01:--z_trans_dh01
 		,total float
 		,xmemo nvarchar(max)
 		
+		,price3 decimal(10,2)
+		,mount3 decimal(10,2)
 		,money3 float
+		
+		,tgg nvarchar(max)
 	)
 	declare @tranmoney1 float
 	declare @tranmoney2 float
@@ -426,59 +430,80 @@ z_trans_dh01:--z_trans_dh01
 			close cursor_table2
 			deallocate cursor_table2
 		
-		select @plusmoney=SUM(ISNULL(plusmoney,0)),@minusmoney=SUM(ISNULL(minusmoney,0)) 
-			from @tmpc where driverno=@driverno			
-		set @total = ISNULL(@tranmoney1,0)+ISNULL(@tranmoney2,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)
+		select @plusmoney=SUM(ISNULL(plusmoney,0)),@minusmoney=SUM(ISNULL(minusmoney,0))from @tmpc where driverno=@driverno			
+		select @money=0
+		select @money= SUM(ISNULL(discountM,0)) from #z_trans_dh01 where driverno=@driverno 
+		set @total = ISNULL(@tranmoney1,0)+ISNULL(@tranmoney2,0)-ISNULL(@money,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)	
 		
 		insert into #z_trans_dh01(gno,pno,driverno,plusmoney)
 		select '6',6,@driverno,@plusmoney
-		insert into #z_trans_dh01(gno,pno,driverno,minusmoney)
-		select '7',7,@driverno,@minusmoney
 		insert into #z_trans_dh01(gno,pno,driverno,total)
-		select '8',8,@driverno,@total
+		select '7',7,@driverno,ISNULL(@tranmoney1,0)+ISNULL(@tranmoney2,0)-ISNULL(@money,0)+ISNULL(@plusmoney,0)
+		insert into #z_trans_dh01(gno,pno,driverno,minusmoney)
+		select '8',8,@driverno,@minusmoney
+		insert into #z_trans_dh01(gno,pno,driverno,total)
+		select '9',9,@driverno,@total
 		----------------------------------------------------------
 		--加油、維修
-		insert into #z_trans_dh01(gno,pno,driverno,trandate,money3,item)
-		select '9',9,@driverno,oildate,SUM(ISNULL([money],0)),'油費'
-		from oil a
-		left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) b on left(a.oildate,6)=b.mon
-		where a.driverno=@driverno
-		and b.mon is not null
-		group by oildate
-		
-		if exists(select * from #z_trans_dh01 where driverno=@driverno and item='油費')
+		if exists(select *
+			from oil a
+			left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) b on left(a.oildate,6)=b.mon
+			where a.driverno=@driverno
+			and b.mon is not null)
 		begin
+			insert into #z_trans_dh01(gno,pno,driverno,trandate)
+			select '10',10,@driverno,'油費'
+			
+			insert into #z_trans_dh01(gno,pno,driverno,trandate,price3,mount3,money3,item)
+			select '11',11,@driverno,oildate,price,SUM(ISNULL([mount],0)),SUM(ISNULL([money],0)),'油費'
+			from oil a
+			left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) b on left(a.oildate,6)=b.mon
+			where a.driverno=@driverno
+			and b.mon is not null
+			group by oildate,price
+		
 			insert into #z_trans_dh01(gno,pno,driverno,money3,item)
-			select '10',10,@driverno,SUM(ISNULL([money],0)),'油費'
+			select '12',12,@driverno,SUM(ISNULL([money],0)),'油費'
 			from oil a
 			left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) b on left(a.oildate,6)=b.mon
 			where a.driverno=@driverno
 			and b.mon is not null
 		end
 		
-		insert into #z_trans_dh01(gno,pno,driverno,trandate,money3,item)
-		select '9',9,@driverno,fixadate,SUM(ISNULL([money],0)),'維修'
-		from fixa a
-		left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) b on left(a.fixadate,6)=b.mon
-		where a.driverno=@driverno
-		and b.mon is not null
-		group by fixadate
-		
-		if exists(select * from #z_trans_dh01 where driverno=@driverno and item='維修')
+		if exists(select *
+			from fixas a
+			left join fixa b on a.noa=b.noa
+			left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) c on left(b.fixadate,6)=c.mon
+			where b.driverno=@driverno
+			and c.mon is not null)
 		begin
+			insert into #z_trans_dh01(gno,pno,driverno,trandate)
+			select '13',13,@driverno,'維修'
+			
+			insert into #z_trans_dh01(gno,pno,driverno,trandate,money3,item,tgg)
+			select '14',14,@driverno,fixadate,SUM(ISNULL(a.[money],0)),'維修'
+				,case when len(ISNULL(b.tgg,''))>0 then b.tgg else ISNULL(a.typea,'') end
+			from fixas a
+			left join fixa b on a.noa=b.noa
+			left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) c on left(b.fixadate,6)=c.mon
+			where b.driverno=@driverno
+			and c.mon is not null
+			group by fixadate,case when len(ISNULL(b.tgg,''))>0 then b.tgg else ISNULL(a.typea,'') end
+		
 			insert into #z_trans_dh01(gno,pno,driverno,money3,item)
-			select '10',10,@driverno,SUM(ISNULL([money],0)),'維修'
-			from fixa a
-			left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) b on left(a.fixadate,6)=b.mon
-			where a.driverno=@driverno
-			and b.mon is not null
+			select '15',15,@driverno,SUM(ISNULL(a.[money],0)),'維修'
+			from fixas a
+			left join fixa b on a.noa=b.noa
+			left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) c on left(b.fixadate,6)=c.mon
+			where b.driverno=@driverno
+			and c.mon is not null
 		end
 		
 		select @n=0
 		select @n=COUNT(1) from #z_trans_dh01 where driverno=@driverno
 		while @n%@pageCount!=0
 		begin
-			insert into #z_trans_dh01(gno,pno,driverno)values('11',11,@driverno)
+			insert into #z_trans_dh01(gno,pno,driverno)values('16',16,@driverno)
 			set @n=@n+1
 		end
 		
@@ -506,7 +531,7 @@ z_trans_dh01:--z_trans_dh01
 		,driverno d01
 		,driver d02
 		,trandate a01
-		,ISNULL(straddr,'') +' -- ' + ISNULL(endaddr,'') + '　　'+ISNULL(memo,'') a02
+		,ISNULL(straddr,'') +' -- ' + ISNULL(endaddr,'')  a02
 		,dbo.getComma(mount,-1) a03
 		,dbo.getComma(tranmoney,-1) a04
 
@@ -521,8 +546,13 @@ z_trans_dh01:--z_trans_dh01
 		,xmemo e01 		
 		
 		,trandate f01
-		,item f02
-		,dbo.getComma(money3,-1) f03
+		,dbo.getComma(mount3,-1) f02
+		,dbo.getComma(price3,-1) f03
+		,dbo.getComma(money3,-1) f04
+		
+		,trandate h01
+		,tgg h02
+		,dbo.getComma(money3,-1) h03
 	from #z_trans_dh01 
 	order by driverno,sel
 	drop table #z_trans_dh01;
