@@ -384,65 +384,71 @@ z_trans_dh01:--z_trans_dh01
 	while(@@FETCH_STATUS <> -1)
 	begin
 		
-		--出車明細
+		--*出車明細
 		insert into #z_trans_dh01(gno,pno,carno,driverno,driver,trandate,straddr,endaddr,mount,price,discount,tranmoney,money1,memo)
 		select '1',1,carno,driverno,driver,trandate,straddr,endaddr,mount,price,discount,tranmoney,[money],memo
 		from @tmpb 
 		where driverno=@driverno
 		order by trandate,treaccy,treno,trenoq
-		--加減項明細
-		insert into #z_trans_dh01(gno,pno,driverno,date2,item,money2)
-		select '2',2,driverno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,''),ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
-		from @tmpc 
-		where driverno=@driverno
-		--運費小計  
+		--*運費小計  
 		select @tranmoney1=0
 		select @tranmoney1=SUM(tranmoney)
 		from @tmpb where driverno=@driverno and tranmoney>0
-		--insert into #z_trans_dh01(gno,pno,driverno,tranmoney)select '3',3,@driverno,@tranmoney
-		--當場收小計  
+		----當場收小計  
 		select @tranmoney2=0
 		select @tranmoney2=SUM(tranmoney) from @tmpb 
 		where driverno=@driverno and tranmoney<0
-		--if isnull(@tranmoney,0)!=0
-		--begin
-			--insert into #z_trans_dh01(gno,pno,driverno,discountM,xmemo)select '4',4,@driverno,abs(@tranmoney),'已收現：'
-		--end
-		
-		insert into #z_trans_dh01(gno,pno,driverno,tranmoney)select '3',3,@driverno,isnull(@tranmoney1,0)+isnull(@tranmoney2,0)
-		--扣%
-			declare cursor_table2 cursor for
-			select discount,sum(tranmoney) from @tmpb 
-			where driverno=@driverno and discount!=1 group by discount 
-			open cursor_table2
+		insert into #z_trans_dh01(gno,pno,driverno,tranmoney)select '2',2,@driverno,isnull(@tranmoney1,0)+isnull(@tranmoney2,0)
+		--*扣%
+		declare cursor_table2 cursor for
+		select discount,sum(tranmoney) from @tmpb 
+		where driverno=@driverno and discount!=1 group by discount 
+		open cursor_table2
+		fetch next from cursor_table2
+		into @discount,@discountM
+		while(@@FETCH_STATUS <> -1)
+		begin	
+			select @money = @discountM+ISNULL(@tranmoney2,0)
+			insert into #z_trans_dh01(gno,pno,driverno,discountM,discount,xmemo)
+			select '3',3,@driverno,round(@money*(1-@discount),0),@discount,CAST((1-@discount)*100 as nvarchar)+'%：'
 			fetch next from cursor_table2
 			into @discount,@discountM
-			while(@@FETCH_STATUS <> -1)
-			begin	
-				select @money = @discountM+ISNULL(@tranmoney2,0)
-			
-				insert into #z_trans_dh01(gno,pno,driverno,discountM,discount,xmemo)
-				select '5',5,@driverno,round(@money*(1-@discount),0),@discount,CAST((1-@discount)*100 as nvarchar)+'%：'
-			
-				fetch next from cursor_table2
-				into @discount,@discountM
-			end
-			close cursor_table2
-			deallocate cursor_table2
-		
+		end
+		close cursor_table2
+		deallocate cursor_table2
+		--------------------------------------------------------------
 		select @plusmoney=SUM(ISNULL(plusmoney,0)),@minusmoney=SUM(ISNULL(minusmoney,0))from @tmpc where driverno=@driverno			
 		select @money=0
 		select @money= SUM(ISNULL(discountM,0)) from #z_trans_dh01 where driverno=@driverno 
 		set @total = ISNULL(@tranmoney1,0)+ISNULL(@tranmoney2,0)-ISNULL(@money,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)	
 		
-		insert into #z_trans_dh01(gno,pno,driverno,plusmoney)
-		select '6',6,@driverno,@plusmoney
+		--加項明細
+		insert into #z_trans_dh01(gno,pno,driverno,date2,item,money2)
+		select '4',4,driverno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,''),ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
+		from @tmpc 
+		where driverno=@driverno
+		and ISNULL(plusmoney,0)-ISNULL(minusmoney,0)>=0
+		--加項小計
+		if exists(select * from #z_trans_dh01 where pno=4 and driverno=@driverno)
+		begin
+			insert into #z_trans_dh01(gno,pno,driverno,plusmoney)
+			select '5',5,@driverno,@plusmoney
+		end
+		--減項明細
+		insert into #z_trans_dh01(gno,pno,driverno,date2,item,money2)
+		select '6',6,driverno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,''),ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
+		from @tmpc 
+		where driverno=@driverno
+		and ISNULL(plusmoney,0)-ISNULL(minusmoney,0)<0
+		--減項小計
+		if exists(select * from #z_trans_dh01 where pno=6 and driverno=@driverno)
+		begin
+			insert into #z_trans_dh01(gno,pno,driverno,minusmoney)
+			select '7',7,@driverno,@minusmoney
+		end
+		--合計
 		insert into #z_trans_dh01(gno,pno,driverno,total)
-		select '7',7,@driverno,ISNULL(@tranmoney1,0)+ISNULL(@tranmoney2,0)-ISNULL(@money,0)+ISNULL(@plusmoney,0)
-		insert into #z_trans_dh01(gno,pno,driverno,minusmoney)
-		select '8',8,@driverno,@minusmoney
-		insert into #z_trans_dh01(gno,pno,driverno,total)
-		select '9',9,@driverno,@total
+		select '8',8,@driverno,@total
 		----------------------------------------------------------
 		--加油、維修
 		if exists(select *
@@ -461,7 +467,8 @@ z_trans_dh01:--z_trans_dh01
 			where a.driverno=@driverno
 			and b.mon is not null
 			group by oildate,price
-		
+			order by oildate
+			
 			insert into #z_trans_dh01(gno,pno,driverno,money3,item)
 			select '12',12,@driverno,SUM(ISNULL([money],0)),'油費'
 			from oil a
@@ -489,7 +496,8 @@ z_trans_dh01:--z_trans_dh01
 			where b.driverno=@driverno
 			and c.mon is not null
 			group by fixadate,case when len(ISNULL(b.tgg,''))>0 then b.tgg else ISNULL(a.typea,'') end
-		
+			order by fixadate
+			
 			insert into #z_trans_dh01(gno,pno,driverno,money3,item)
 			select '15',15,@driverno,SUM(ISNULL(a.[money],0)),'維修'
 			from fixas a
