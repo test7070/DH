@@ -428,6 +428,7 @@ z_trans_dh01:--z_trans_dh01
 		from @tmpc 
 		where driverno=@driverno
 		and ISNULL(plusmoney,0)-ISNULL(minusmoney,0)>=0
+		order by datea
 		--加項小計
 		if exists(select * from #z_trans_dh01 where pno=4 and driverno=@driverno)
 		begin
