@@ -411,6 +411,9 @@ z_trans_dh01:--z_trans_dh01
 			select @money = @discountM+ISNULL(@tranmoney2,0)
 			insert into #z_trans_dh01(gno,pno,driverno,discountM,discount,xmemo)
 			select '3',3,@driverno,round(@money*(1-@discount),0),@discount,CAST((1-@discount)*100 as nvarchar)+'%：'
+			
+			insert into #z_trans_dh01(gno,pno,driverno,discountM,xmemo)
+			select '3',3,@driverno,@money-round(@money*(1-@discount),0),'應付：'
 			fetch next from cursor_table2
 			into @discount,@discountM
 		end
@@ -488,15 +491,16 @@ z_trans_dh01:--z_trans_dh01
 			insert into #z_trans_dh01(gno,pno,driverno,trandate)
 			select '13',13,@driverno,'維修'
 			
-			insert into #z_trans_dh01(gno,pno,driverno,trandate,money3,item,tgg)
+			insert into #z_trans_dh01(gno,pno,driverno,trandate,money3,item,tgg,memo)
 			select '14',14,@driverno,fixadate,SUM(ISNULL(a.[money],0)),'維修'
 				,case when len(ISNULL(b.tgg,''))>0 then b.tgg else ISNULL(a.typea,'') end
+				,a.memo
 			from fixas a
 			left join fixa b on a.noa=b.noa
 			left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) c on left(b.fixadate,6)=c.mon
 			where b.driverno=@driverno
 			and c.mon is not null
-			group by fixadate,case when len(ISNULL(b.tgg,''))>0 then b.tgg else ISNULL(a.typea,'') end
+			group by fixadate,case when len(ISNULL(b.tgg,''))>0 then b.tgg else ISNULL(a.typea,'') end,a.memo
 			order by fixadate
 			
 			insert into #z_trans_dh01(gno,pno,driverno,money3,item)
@@ -543,6 +547,7 @@ z_trans_dh01:--z_trans_dh01
 		,ISNULL(straddr,'') +' -- ' + ISNULL(endaddr,'')  a02
 		,dbo.getComma(mount,-1) a03
 		,dbo.getComma(tranmoney,-1) a04
+		,memo a05
 
 		,date2 b01
 		,item b02
@@ -561,7 +566,8 @@ z_trans_dh01:--z_trans_dh01
 		
 		,trandate h01
 		,tgg h02
-		,dbo.getComma(money3,-1) h03
+		,memo h03
+		,dbo.getComma(money3,-1) h04
 	from #z_trans_dh01 
 	order by driverno,sel
 	drop table #z_trans_dh01;
