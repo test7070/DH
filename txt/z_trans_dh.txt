@@ -422,7 +422,7 @@ z_trans_dh01:--z_trans_dh01
 		--------------------------------------------------------------
 		select @plusmoney=SUM(ISNULL(plusmoney,0)),@minusmoney=SUM(ISNULL(minusmoney,0))from @tmpc where driverno=@driverno			
 		select @money=0
-		select @money= SUM(ISNULL(discountM,0)) from #z_trans_dh01 where driverno=@driverno 
+		select @money= SUM(ISNULL(discountM,0)) from #z_trans_dh01 where driverno=@driverno and xmemo!='應付：'
 		set @total = ISNULL(@tranmoney1,0)+ISNULL(@tranmoney2,0)-ISNULL(@money,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)	
 		
 		--加項明細
