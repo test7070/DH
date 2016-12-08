@@ -95,16 +95,18 @@ z_trans_dh02:--z_trans_dh02
 	declare @tmpe table(
 		sel int identity(1,1)
 		,custno nvarchar(20)
+		,mon nvarchar(20)
 		,[money] float
 	)
-	insert into @tmpe(custno,[money])
-	select a.custno,sum(ISNULL(a.total,0)-ISNULL(b.paysale,0))
+	insert into @tmpe(custno,mon,[money])
+	select a.custno,LEFT(a.datea,6),sum(ISNULL(a.total,0)-ISNULL(b.paysale,0))
 	from view_trd a
 	left join(select vccno,SUM(ISNULL(paysale,0)) paysale from umms group by vccno) b on a.noa=b.vccno
 	where ISNULL(a.custno,'') between @t_bcustno and @t_ecustno
 	and ISNULL(a.datea,'') <@t_bdate
-	and a.total!=b.paysale
-	group by a.custno
+	--and a.total!=b.paysale
+	group by a.custno,LEFT(a.datea,6)
+	
 	--------------------------------------------------------------------------------------------------
 	IF OBJECT_ID('tempdb..#z_trans_db02')is not null 
 	BEGIN 
@@ -141,6 +143,8 @@ z_trans_dh02:--z_trans_dh02
 		,minusmoney float
 		,tax float
 		,total float
+		
+		,mon nvarchar(20)
 	)
 	declare @custno nvarchar(20)
 	declare @money float
@@ -149,6 +153,7 @@ z_trans_dh02:--z_trans_dh02
 	declare @tax float
 	declare @total float
 	declare @bmoney float
+	declare @mon nvarchar(20)
 	
 	declare @pageCount int = 30 --一頁幾筆資料
 	declare @n int
@@ -195,8 +200,22 @@ z_trans_dh02:--z_trans_dh02
 			insert into #z_trans_db02(gno,pno,custno,minusmoney) select '6',5,@custno,@minusmoney
 		if isnull(@tax,0) !=0
 			insert into #z_trans_db02(gno,pno,custno,tax) select '7',6,@custno,@tax
-		if ISNULL(@bmoney,0) !=0
-			insert into #z_trans_db02(gno,pno,custno,[money]) select '8',7,@custno,@bmoney
+			
+		declare cursor_table2 cursor for
+		select mon,[money] from @tmpe where custno=@custno order by mon
+		open cursor_table2
+		fetch next from cursor_table2
+		into @mon,@bmoney
+		while(@@FETCH_STATUS <> -1)
+		begin	
+			if ISNULL(@bmoney,0) !=0
+				insert into #z_trans_db02(gno,pno,custno,mon,[money]) select '8',7,@custno,@mon,@bmoney
+			fetch next from cursor_table2
+			into @mon,@bmoney
+		end
+		close cursor_table2
+		deallocate cursor_table2
+		
 		
 		insert into #z_trans_db02(gno,pno,custno,total)
 		select '9',8,@custno,@total
@@ -257,10 +276,12 @@ z_trans_dh02:--z_trans_dh02
 		,dbo.getComma(a.[tax],-1) c04
 		,dbo.getComma(a.[money],-1) c05
 		,dbo.getComma(a.[total],-1) c06
+		,a.mon+'：' c07
 	from #z_trans_db02 a
 	left join cust b on a.custno=b.noa
-	order by a.custno,a.sel;
-
+	order by a.custno,a.sel
+	drop table #z_trans_db02;
+	
 z_trans_dh01:--z_trans_dh01	
 	SET QUOTED_IDENTIFIER OFF
 	declare @cmd nvarchar(max)
