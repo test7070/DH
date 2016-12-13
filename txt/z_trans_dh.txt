@@ -189,7 +189,7 @@ z_trans_dh02:--z_trans_dh02
 			from @tmpc where custno=@custno
 		select @tax=SUM(isnull([tax],0)) from @tmpd where custno=@custno	
 		
-		select @bmoney=ISNULL([money],0) from @tmpe where custno=@custno
+		select @bmoney=sum(ISNULL([money],0)) from @tmpe where custno=@custno
 		
 		set @total = ISNULL(@money,0)+ISNULL(@plusmoney,0)-ISNULL(@minusmoney,0)+ISNULL(@tax,0) + ISNULL(@bmoney,0)
 		insert into #z_trans_db02(gno,pno,custno,[money])
