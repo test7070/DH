@@ -209,7 +209,7 @@ z_trans_dh02:--z_trans_dh02
 		while(@@FETCH_STATUS <> -1)
 		begin	
 			if ISNULL(@bmoney,0) !=0
-				insert into #z_trans_db02(gno,pno,custno,mon,[money]) select '8',7,@custno,@mon,@bmoney
+				insert into #z_trans_db02(gno,pno,custno,mon,[money]) select '8',7,@custno,@mon+'尚欠款',@bmoney
 			fetch next from cursor_table2
 			into @mon,@bmoney
 		end
