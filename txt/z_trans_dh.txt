@@ -416,6 +416,7 @@ z_trans_dh01:--z_trans_dh01
 	declare @discount float
 	
 	declare @driverno nvarchar(20)
+	declare @carno nvarchar(20)
 	
 	declare @pageCount int = 30 --一頁幾筆資料
 	declare @n int
@@ -505,24 +506,45 @@ z_trans_dh01:--z_trans_dh01
 			where a.driverno=@driverno
 			and b.mon is not null)
 		begin
-			insert into #z_trans_dh01(gno,pno,driverno,trandate)
-			select '10',10,@driverno,'油費'
 			
-			insert into #z_trans_dh01(gno,pno,driverno,carno,trandate,price3,mount3,money3,item)
-			select '11',11,@driverno,a.carno,a.oildate,a.price,SUM(ISNULL(a.[mount],0)),SUM(ISNULL(a.[money],0)),'油費'
-			from oil a
+			declare cursor_table3 cursor for
+			select carno from oil a
 			left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) b on left(a.oildate,6)=b.mon
 			where a.driverno=@driverno
 			and b.mon is not null
-			group by carno,oildate,price
-			order by oildate
+			group by carno
+			open cursor_table3
+			fetch next from cursor_table3
+			into @carno
+			while(@@FETCH_STATUS <> -1)
+			begin
+				
+				insert into #z_trans_dh01(gno,pno,driverno,carno,trandate)
+				select '10',10,@driverno,@carno,'油費'
+				
+				insert into #z_trans_dh01(gno,pno,driverno,carno,trandate,price3,mount3,money3,item)
+				select '11',11,@driverno,a.carno,a.oildate,a.price,SUM(ISNULL(a.[mount],0)),SUM(ISNULL(a.[money],0)),'油費'
+				from oil a
+				left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) b on left(a.oildate,6)=b.mon
+				where a.driverno=@driverno
+				and b.mon is not null
+				and a.carno=@carno
+				group by carno,oildate,price
+				order by oildate
+				
+				insert into #z_trans_dh01(gno,pno,driverno,carno,money3,item)
+				select '12',12,@driverno,@carno,SUM(ISNULL([money],0)),'油費'
+				from oil a
+				left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) b on left(a.oildate,6)=b.mon
+				where a.driverno=@driverno
+				and b.mon is not null
+				and a.carno=@carno
 			
-			insert into #z_trans_dh01(gno,pno,driverno,money3,item)
-			select '12',12,@driverno,SUM(ISNULL([money],0)),'油費'
-			from oil a
-			left join(select left(trandate,6) mon from @tmpb where driverno=@driverno group by left(trandate,6)) b on left(a.oildate,6)=b.mon
-			where a.driverno=@driverno
-			and b.mon is not null
+				fetch next from cursor_table3
+				into @carno
+			end
+			close cursor_table3
+			deallocate cursor_table3
 		end
 		
 		if exists(select *
