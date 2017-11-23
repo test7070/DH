@@ -357,9 +357,10 @@ z_trans_dh01:--z_trans_dh01
 		,plusmoney float
 		,minusitem nvarchar(max)
 		,minusmoney float
+		,memo nvarchar(max)
 	)
-	insert into @tmpc(treaccy,treno,driverno,datea,carchgno,plusitem,plusmoney,minusitem,minusmoney)
-	select b.treaccy,b.treno,b.driverno,a.datea,a.noa,a.plusitem,a.plusmoney,a.minusitem,a.minusmoney
+	insert into @tmpc(treaccy,treno,driverno,datea,carchgno,plusitem,plusmoney,minusitem,minusmoney,memo)
+	select b.treaccy,b.treno,b.driverno,a.datea,a.noa,a.plusitem,a.plusmoney,a.minusitem,a.minusmoney,a.memo
 	from carchg a
 	left join @tmpa b on CHARINDEX(a.noa,b.carchgno)>0
 	where b.treno is not null
@@ -472,7 +473,8 @@ z_trans_dh01:--z_trans_dh01
 		
 		--加項明細
 		insert into #z_trans_dh01(gno,pno,driverno,date2,item,money2)
-		select '4',4,driverno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,''),ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
+		select '4',4,driverno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,'')+isnull(memo,'')
+			,ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
 		from @tmpc 
 		where driverno=@driverno
 		and ISNULL(plusmoney,0)-ISNULL(minusmoney,0)>=0
@@ -485,7 +487,8 @@ z_trans_dh01:--z_trans_dh01
 		end
 		--減項明細
 		insert into #z_trans_dh01(gno,pno,driverno,date2,item,money2)
-		select '6',6,driverno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,''),ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
+		select '6',6,driverno,datea,ISNULL(plusitem,'')+ISNULL(minusitem,'')+isnull(memo,'')
+			,ISNULL(plusmoney,0)-ISNULL(minusmoney,0) 
 		from @tmpc 
 		where driverno=@driverno
 		and ISNULL(plusmoney,0)-ISNULL(minusmoney,0)<0
